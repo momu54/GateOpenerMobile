@@ -1,7 +1,8 @@
 import { getItemAsync, setItemAsync } from 'expo-secure-store';
 import { ForwardedRef, ReactNode, useEffect, useRef, useState } from 'react';
-import { Button, Card, Text, TextInput, Title } from 'react-native-paper';
+import { Button, Card, Dialog, Portal, Text, TextInput, Title } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Keyboard, TextInput as RNTextInput } from 'react-native';
 
 function SettingCard({
 	title,
@@ -29,35 +30,73 @@ function SettingCard({
 }
 
 function AddressCard() {
-	const [address, setAddress] = useState('');
 	const [currentAddress, setCurrentAddress] = useState('');
-	getItemAsync('address').then((value) => value && setCurrentAddress(value));
+	const [address, setAddress] = useState('');
+	getItemAsync('address').then((value) => {
+		if (value) setCurrentAddress(value);
+	});
 
-	async function submitAddress() {
+	function submitAddress() {
 		setCurrentAddress(address);
 		setItemAsync('address', address);
 	}
 
+	const addressInputRef = useRef<RNTextInput>();
+
+	function onPress() {
+		addressInputRef.current?.blur();
+		submitAddress();
+	}
+
+	useEffect(() => {
+		const listener = Keyboard.addListener('keyboardDidHide', () => {
+			addressInputRef.current?.blur();
+		});
+
+		return () => listener.remove();
+	});
+
 	return (
-		<SettingCard title="伺服器" actions={<Button mode="contained">儲存</Button>}>
+		<SettingCard
+			title="伺服器"
+			actions={
+				<Button mode="contained" onPress={onPress}>
+					儲存
+				</Button>
+			}
+		>
 			<TextInput
 				submitBehavior="blurAndSubmit"
 				mode="outlined"
 				label="伺服器位址"
 				onChangeText={setAddress}
-				placeholder={currentAddress}
 				onSubmitEditing={submitAddress}
+				ref={addressInputRef as ForwardedRef<RNTextInput>}
+				placeholder={currentAddress}
 			/>
 		</SettingCard>
 	);
 }
 
-function PublicKeyCard() {
+const ErrorMessageMap = {
+	[401]: 'Unauthorized',
+	[404]: 'Not Found',
+	[409]: 'Key already exists',
+	[405]: 'Method Not Allowed',
+};
+
+function PublicKeyCard({
+	setErrorMessage,
+	showErrorDialog,
+}: {
+	setErrorMessage: (message: string) => void;
+	showErrorDialog: () => void;
+}) {
 	const [publicKey, setPublicKey] = useState('');
 	getItemAsync('publicKey').then((value) => value && setPublicKey(value));
 
 	async function onSendPublicKey() {
-		await fetch(
+		const response = await fetch(
 			`http://${
 				(await getItemAsync('address')) ?? 'http://localhost:3000'
 			}/publicKey`,
@@ -67,6 +106,13 @@ function PublicKeyCard() {
 				headers: { 'Content-Type': 'text/plain' },
 			}
 		);
+		if (!response.ok) {
+			setErrorMessage(
+				ErrorMessageMap[response.status as keyof typeof ErrorMessageMap] ??
+					'Unknown error'
+			);
+			showErrorDialog();
+		}
 	}
 
 	return (
@@ -84,11 +130,31 @@ function PublicKeyCard() {
 }
 
 export default function Settings() {
+	const [requestFailedDialogVisible, setRequestFailedDialogVisible] = useState(false);
+	const [errorMessage, setErrorMessage] = useState('Unknown error');
+	const showRequestFailedDialog = () => setRequestFailedDialogVisible(true);
+
 	return (
 		<SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
 			<Title>設定</Title>
 			<AddressCard />
-			<PublicKeyCard />
+			<PublicKeyCard
+				setErrorMessage={setErrorMessage}
+				showErrorDialog={showRequestFailedDialog}
+			/>
+			<Portal>
+				<Dialog visible={requestFailedDialogVisible} dismissable>
+					<Dialog.Title>錯誤</Dialog.Title>
+					<Dialog.Content>
+						<Text variant="bodyMedium">{errorMessage}</Text>
+					</Dialog.Content>
+					<Dialog.Actions>
+						<Button onPress={() => setRequestFailedDialogVisible(false)}>
+							關閉
+						</Button>
+					</Dialog.Actions>
+				</Dialog>
+			</Portal>
 		</SafeAreaView>
 	);
 }

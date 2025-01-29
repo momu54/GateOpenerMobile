@@ -2,9 +2,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Dialog, Modal, Portal, Text } from 'react-native-paper';
 import ReactNativeBiometrics, { BiometryTypes } from 'react-native-biometrics';
 import { useEffect, useState } from 'react';
-import { Link } from 'expo-router';
+import { fetch } from 'expo/fetch';
 import { getItemAsync, setItemAsync } from 'expo-secure-store';
 import { BackHandler } from 'react-native';
+import { FetchResponse } from 'expo/build/winter/fetch/FetchResponse';
 
 async function PrepareBiometric(showDialog: () => void) {
 	const rnBiometrics = new ReactNativeBiometrics();
@@ -25,8 +26,18 @@ enum DoorAction {
 	STOP = 'stop',
 	CLOSE = 'close',
 }
+const ErrorMessageMap = {
+	[401]: 'Unauthorized',
+	[404]: 'Not Found',
+	[409]: 'Key already exists',
+	[405]: 'Method Not Allowed',
+};
 
-async function onPress(doorAction: DoorAction) {
+async function onPress(
+	doorAction: DoorAction,
+	setErrorMessage: (message: string) => void,
+	showErrorDialog: () => void
+) {
 	const rnBiometrics = new ReactNativeBiometrics();
 	const { success, signature } = await rnBiometrics.createSignature({
 		payload: doorAction,
@@ -36,10 +47,8 @@ async function onPress(doorAction: DoorAction) {
 	if (!success) {
 		return;
 	}
-
 	const publicKey = await getItemAsync('publicKey');
-
-	await fetch(
+	const response = await fetch(
 		`http://${
 			(await getItemAsync('address')) ?? 'http://localhost:3000'
 		}/door/${doorAction}`,
@@ -53,14 +62,24 @@ async function onPress(doorAction: DoorAction) {
 			headers: { 'Content-Type': 'application/json' },
 		}
 	);
+	if (!response.ok) {
+		setErrorMessage(
+			ErrorMessageMap[response.status as keyof typeof ErrorMessageMap] ??
+				'Unknown error'
+		);
+		showErrorDialog();
+	}
 }
 
 export default function Settings() {
-	const [visible, setVisible] = useState(false);
-	const showDialog = () => setVisible(true);
+	const [noBiometricDialogvisible, setNoBiometricDialogVisible] = useState(false);
+	const [requestFailedDialogVisible, setRequestFailedDialogVisible] = useState(false);
+	const [errorMessage, setErrorMessage] = useState('Unknown error');
+	const showNoBiometricDialog = () => setNoBiometricDialogVisible(true);
+	const showRequestFailedDialog = () => setRequestFailedDialogVisible(true);
 
 	useEffect(() => {
-		PrepareBiometric(showDialog);
+		PrepareBiometric(showNoBiometricDialog);
 	}, []);
 
 	return (
@@ -72,7 +91,7 @@ export default function Settings() {
 			}}
 		>
 			<Portal>
-				<Dialog visible={visible} dismissable={false}>
+				<Dialog visible={noBiometricDialogvisible} dismissable={false}>
 					<Dialog.Title>錯誤</Dialog.Title>
 					<Dialog.Content>
 						<Text variant="bodyMedium">本裝置不支援生物辨識</Text>
@@ -82,14 +101,34 @@ export default function Settings() {
 					</Dialog.Actions>
 				</Dialog>
 			</Portal>
+			<Portal>
+				<Dialog visible={requestFailedDialogVisible} dismissable>
+					<Dialog.Title>錯誤</Dialog.Title>
+					<Dialog.Content>
+						<Text variant="bodyMedium">{errorMessage}</Text>
+					</Dialog.Content>
+					<Dialog.Actions>
+						<Button onPress={() => setRequestFailedDialogVisible(false)}>
+							關閉
+						</Button>
+					</Dialog.Actions>
+				</Dialog>
+			</Portal>
 			<Button
 				mode="contained"
 				style={{ marginBottom: 20 }}
-				onPress={() => onPress(DoorAction.OPEN)}
+				onPress={() =>
+					onPress(DoorAction.OPEN, setErrorMessage, showRequestFailedDialog)
+				}
 			>
 				開門
 			</Button>
-			<Button mode="contained" onPress={() => onPress(DoorAction.CLOSE)}>
+			<Button
+				mode="contained"
+				onPress={() =>
+					onPress(DoorAction.CLOSE, setErrorMessage, showRequestFailedDialog)
+				}
+			>
 				關門
 			</Button>
 		</SafeAreaView>

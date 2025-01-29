@@ -93,7 +93,6 @@ export default function RootLayout() {
 									<TabBarIcon name="settings" {...iconProps} />
 								),
 								tabBarLabel: '設定',
-								tabBarBadge: 2,
 							}}
 						/>
 						<Tabs.Screen
