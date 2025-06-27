@@ -1,8 +1,20 @@
 import { getItemAsync, setItemAsync } from 'expo-secure-store';
 import { ForwardedRef, ReactNode, useEffect, useRef, useState } from 'react';
-import { Button, Card, Dialog, Portal, Text, TextInput, Title } from 'react-native-paper';
+import {
+	Button,
+	Card,
+	Dialog,
+	Portal,
+	Text,
+	TextInput,
+	Title,
+	useTheme,
+} from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Keyboard, TextInput as RNTextInput } from 'react-native';
+import ReactNativeBiometrics from 'react-native-biometrics';
+
+const BottomPaddingFix = { paddingBottom: 5 } as const;
 
 function SettingCard({
 	title,
@@ -14,15 +26,15 @@ function SettingCard({
 	actions?: ReactNode;
 }) {
 	return (
-		<Card mode="outlined" style={{ padding: 0, alignSelf: 'stretch', margin: 25 }}>
+		<Card mode="elevated" style={{ padding: 0, alignSelf: 'stretch', margin: 25 }}>
 			<Card.Title
-				title={title}
+				title={<Text variant="titleMedium">{title}</Text>}
 				style={{ paddingTop: 30, paddingLeft: 30, paddingBottom: 10 }}
 			/>
 			<Card.Content style={{ paddingLeft: 30, paddingRight: 30 }}>
 				{content}
 			</Card.Content>
-			<Card.Actions style={{ paddingTop: 10, paddingBottom: 20, paddingRight: 30 }}>
+			<Card.Actions style={{ paddingTop: 20, paddingBottom: 25, paddingRight: 30 }}>
 				{actions}
 			</Card.Actions>
 		</Card>
@@ -32,6 +44,7 @@ function SettingCard({
 function AddressCard() {
 	const [currentAddress, setCurrentAddress] = useState('');
 	const [address, setAddress] = useState('');
+	const { colors } = useTheme();
 	getItemAsync('address').then((value) => {
 		if (value) setCurrentAddress(value);
 	});
@@ -73,6 +86,10 @@ function AddressCard() {
 				onSubmitEditing={submitAddress}
 				ref={addressInputRef as ForwardedRef<RNTextInput>}
 				placeholder={currentAddress}
+				style={{
+					...BottomPaddingFix,
+					backgroundColor: colors.elevation.level1,
+				}}
 			/>
 		</SettingCard>
 	);
@@ -94,6 +111,7 @@ function PublicKeyCard({
 }) {
 	const [publicKey, setPublicKey] = useState('');
 	getItemAsync('publicKey').then((value) => value && setPublicKey(value));
+	const [updateWarningVisible, setUpdateWarningVisible] = useState(false);
 
 	async function onSendPublicKey() {
 		const response = await fetch(
@@ -115,17 +133,60 @@ function PublicKeyCard({
 		}
 	}
 
+	async function onUpdatePublicKey() {
+		setUpdateWarningVisible(false);
+		const rnBiometrics = new ReactNativeBiometrics();
+		const { publicKey } = await rnBiometrics.createKeys();
+		await setItemAsync('publicKey', publicKey);
+		setPublicKey(publicKey);
+	}
 	return (
-		<SettingCard
-			title="公鑰"
-			actions={
-				<Button mode="contained" onPress={onSendPublicKey}>
-					傳送
-				</Button>
-			}
-		>
-			<Text variant="bodyMedium">{publicKey}</Text>
-		</SettingCard>
+		<>
+			<Portal>
+				<Dialog visible={updateWarningVisible} dismissable={true}>
+					<Dialog.Title>
+						<Text variant="titleLarge" style={{ fontWeight: 'bold' }}>
+							警告
+						</Text>
+					</Dialog.Title>
+					<Dialog.Content>
+						<Text variant="bodyMedium">
+							在伺服器未準備更新時請勿使用{'\n'}
+							否則可能會導致公鑰無法使用。{'\n'}
+							本操作無法回復，請確認伺服器已準備好接收更新。
+						</Text>
+					</Dialog.Content>
+					<Dialog.Actions>
+						<Button onPress={onUpdatePublicKey}>確定</Button>
+						<Button onPress={() => setUpdateWarningVisible(false)}>
+							離開
+						</Button>
+					</Dialog.Actions>
+				</Dialog>
+			</Portal>
+			<SettingCard
+				title="公鑰"
+				actions={
+					<>
+						<Button
+							mode="contained-tonal"
+							onPress={() => setUpdateWarningVisible(true)}
+						>
+							更新
+						</Button>
+						<Button
+							mode="contained"
+							style={{ marginLeft: 10 }}
+							onPress={onSendPublicKey}
+						>
+							傳送
+						</Button>
+					</>
+				}
+			>
+				<Text variant="bodyMedium">{publicKey}</Text>
+			</SettingCard>
+		</>
 	);
 }
 
@@ -144,7 +205,9 @@ export default function Settings() {
 			/>
 			<Portal>
 				<Dialog visible={requestFailedDialogVisible} dismissable>
-					<Dialog.Title>錯誤</Dialog.Title>
+					<Dialog.Title>
+						<Text variant="titleMedium">錯誤</Text>
+					</Dialog.Title>
 					<Dialog.Content>
 						<Text variant="bodyMedium">{errorMessage}</Text>
 					</Dialog.Content>
