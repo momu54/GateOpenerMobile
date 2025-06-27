@@ -1,6 +1,6 @@
 {
 	"$schema": "https://json.schemastore.org/package",
-	"name": "dooropener",
+	"name": "gateopener_mobile",
 	"main": "expo-router/entry",
 	"version": "1.0.0",
 	"scripts": {
