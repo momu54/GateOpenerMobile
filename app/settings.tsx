@@ -115,7 +115,7 @@ function PublicKeyCard({
 
 	async function onSendPublicKey() {
 		const response = await fetch(
-			`http://${
+			`${
 				(await getItemAsync('address')) ?? 'http://localhost:3000'
 			}/publicKey`,
 			{
