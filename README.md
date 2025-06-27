@@ -5,7 +5,7 @@ ENGLISH | [繁體中文](https://github.com/momu54/GateOpenerMobile/blob/master/
 A Mobile app that can control a gate via Internet and a microcontroller.  
 Althought it's written by React Native, it doesn't support iOS.
 
-# Startubg Development Server
+# Starting Development Server
 
 1. Install dependencies
 
