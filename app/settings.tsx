@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Keyboard, TextInput as RNTextInput } from 'react-native';
 import ReactNativeBiometrics from 'react-native-biometrics';
+import { ResultMessage } from '@/lib/typing';
 
 const BottomPaddingFix = { paddingBottom: 5 } as const;
 
@@ -95,42 +96,38 @@ function AddressCard() {
 	);
 }
 
-const ErrorMessageMap = {
-	[401]: 'Unauthorized',
-	[404]: 'Not Found',
-	[409]: 'Key already exists',
-	[405]: 'Method Not Allowed',
-};
-
 function PublicKeyCard({
-	setErrorMessage,
-	showErrorDialog,
+	setResultMessage,
+	showResultDialog,
 }: {
-	setErrorMessage: (message: string) => void;
-	showErrorDialog: () => void;
+	setResultMessage: (resultMessage: ResultMessage) => void;
+	showResultDialog: () => void;
 }) {
 	const [publicKey, setPublicKey] = useState('');
 	getItemAsync('publicKey').then((value) => value && setPublicKey(value));
 	const [updateWarningVisible, setUpdateWarningVisible] = useState(false);
 
 	async function onSendPublicKey() {
-		const response = await fetch(
-			`${
-				(await getItemAsync('address')) ?? 'http://localhost:3000'
-			}/publicKey`,
-			{
-				body: publicKey,
-				method: 'POST',
-				headers: { 'Content-Type': 'text/plain' },
-			}
-		);
-		if (!response.ok) {
-			setErrorMessage(
-				ErrorMessageMap[response.status as keyof typeof ErrorMessageMap] ??
-					'Unknown error'
-			);
-			showErrorDialog();
+		const address = await getItemAsync('address');
+		if (!address) {
+			setResultMessage({
+				status: 'failed',
+				message: 'Address not set',
+			});
+			showResultDialog();
+			return;
 		}
+		const response = await fetch(`${address}/publicKey`, {
+			body: publicKey,
+			method: 'POST',
+			headers: { 'Content-Type': 'text/plain' },
+		});
+		const jsonResponse: ResultMessage = await response.json().catch(() => ({
+			status: 'failed',
+			message: 'Unknown error',
+		}));
+		setResultMessage(jsonResponse);
+		showResultDialog();
 	}
 
 	async function onUpdatePublicKey() {
@@ -191,28 +188,33 @@ function PublicKeyCard({
 }
 
 export default function Settings() {
-	const [requestFailedDialogVisible, setRequestFailedDialogVisible] = useState(false);
-	const [errorMessage, setErrorMessage] = useState('Unknown error');
-	const showRequestFailedDialog = () => setRequestFailedDialogVisible(true);
+	const [resultMessageVisible, setResultMessageVisible] = useState(false);
+	const [resultMessage, setResultMessage] = useState<ResultMessage>({
+		status: 'failed',
+		message: 'Unknown error',
+	});
+	const showRequestFailedDialog = () => setResultMessageVisible(true);
 
 	return (
 		<SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
 			<Title>設定</Title>
 			<AddressCard />
 			<PublicKeyCard
-				setErrorMessage={setErrorMessage}
-				showErrorDialog={showRequestFailedDialog}
+				setResultMessage={setResultMessage}
+				showResultDialog={showRequestFailedDialog}
 			/>
 			<Portal>
-				<Dialog visible={requestFailedDialogVisible} dismissable>
+				<Dialog visible={resultMessageVisible} dismissable>
 					<Dialog.Title>
-						<Text variant="titleMedium">錯誤</Text>
+						<Text variant="titleMedium">
+							{resultMessage.status === 'success' ? '成功' : '錯誤'}
+						</Text>
 					</Dialog.Title>
 					<Dialog.Content>
-						<Text variant="bodyMedium">{errorMessage}</Text>
+						<Text variant="bodyMedium">{resultMessage.message}</Text>
 					</Dialog.Content>
 					<Dialog.Actions>
-						<Button onPress={() => setRequestFailedDialogVisible(false)}>
+						<Button onPress={() => setResultMessageVisible(false)}>
 							關閉
 						</Button>
 					</Dialog.Actions>

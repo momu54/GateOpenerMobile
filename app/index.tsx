@@ -14,6 +14,7 @@ import { fetch } from 'expo/fetch';
 import { getItemAsync, setItemAsync } from 'expo-secure-store';
 import { BackHandler } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { ResultMessage } from '@/lib/typing';
 
 async function PrepareBiometric(showDialog: () => void) {
 	const rnBiometrics = new ReactNativeBiometrics();
@@ -34,17 +35,11 @@ enum DoorAction {
 	STOP = 'STOP',
 	CLOSE = 'CLOSE',
 }
-const ErrorMessageMap = {
-	[401]: 'Unauthorized',
-	[404]: 'Not Found',
-	[409]: 'Key already exists',
-	[405]: 'Method Not Allowed',
-};
 
 async function onPress(
 	doorAction: DoorAction,
-	setErrorMessage: (message: string) => void,
-	showErrorDialog: () => void
+	setResultMessage: (resultMessage: ResultMessage) => void,
+	showResultDialog: () => void
 ) {
 	const rnBiometrics = new ReactNativeBiometrics();
 	const { success, signature } = await rnBiometrics.createSignature({
@@ -56,33 +51,41 @@ async function onPress(
 		return;
 	}
 	const publicKey = await getItemAsync('publicKey');
-	const response = await fetch(
-		`${(await getItemAsync('address')) ?? 'http://localhost:3000'}/gate`,
-		{
-			body: JSON.stringify({
-				signature,
-				action: doorAction,
-				publicKey: publicKey,
-			}),
-			method: 'PATCH',
-			headers: { 'Content-Type': 'application/json' },
-		}
-	);
-	if (!response.ok) {
-		setErrorMessage(
-			ErrorMessageMap[response.status as keyof typeof ErrorMessageMap] ??
-				'Unknown error'
-		);
-		showErrorDialog();
+	const address = await getItemAsync('address');
+	if (!address) {
+		setResultMessage({
+			status: 'failed',
+			message: 'Address not set',
+		});
+		showResultDialog();
+		return;
 	}
+	const response = await fetch(`${address}/gate`, {
+		body: JSON.stringify({
+			signature,
+			action: doorAction,
+			publicKey: publicKey,
+		}),
+		method: 'PATCH',
+		headers: { 'Content-Type': 'application/json' },
+	});
+	const jsonResponse: ResultMessage = await response.json().catch(() => ({
+		status: 'failed',
+		message: 'Unknown error',
+	}));
+	setResultMessage(jsonResponse);
+	showResultDialog();
 }
 
 export default function Settings() {
 	const [noBiometricDialogvisible, setNoBiometricDialogVisible] = useState(false);
-	const [requestFailedDialogVisible, setRequestFailedDialogVisible] = useState(false);
-	const [errorMessage, setErrorMessage] = useState('Unknown error');
+	const [resultMessageVisible, setResultMessageVisible] = useState(false);
+	const [resultMessage, setResultMessage] = useState<ResultMessage>({
+		status: 'failed',
+		message: 'Unknown error',
+	});
 	const showNoBiometricDialog = () => setNoBiometricDialogVisible(true);
-	const showRequestFailedDialog = () => setRequestFailedDialogVisible(true);
+	const showRequestFailedDialog = () => setResultMessageVisible(true);
 	const { colors } = useTheme();
 
 	useEffect(() => {
@@ -109,13 +112,15 @@ export default function Settings() {
 				</Dialog>
 			</Portal>
 			<Portal>
-				<Dialog visible={requestFailedDialogVisible} dismissable>
-					<Dialog.Title>錯誤</Dialog.Title>
+				<Dialog visible={resultMessageVisible} dismissable>
+					<Dialog.Title>
+						{resultMessage.status === 'success' ? '成功' : '錯誤'}
+					</Dialog.Title>
 					<Dialog.Content>
-						<Text variant="bodyMedium">{errorMessage}</Text>
+						<Text variant="bodyMedium">{resultMessage.message}</Text>
 					</Dialog.Content>
 					<Dialog.Actions>
-						<Button onPress={() => setRequestFailedDialogVisible(false)}>
+						<Button onPress={() => setResultMessageVisible(false)}>
 							關閉
 						</Button>
 					</Dialog.Actions>
@@ -133,7 +138,7 @@ export default function Settings() {
 					/>
 				)}
 				onPress={() =>
-					onPress(DoorAction.OPEN, setErrorMessage, showRequestFailedDialog)
+					onPress(DoorAction.OPEN, setResultMessage, showRequestFailedDialog)
 				}
 				style={{ marginBottom: 10 }}
 			/>
@@ -149,7 +154,7 @@ export default function Settings() {
 					/>
 				)}
 				onPress={() =>
-					onPress(DoorAction.STOP, setErrorMessage, showRequestFailedDialog)
+					onPress(DoorAction.STOP, setResultMessage, showRequestFailedDialog)
 				}
 				style={{ marginBottom: 10 }}
 			/>
@@ -165,7 +170,7 @@ export default function Settings() {
 					/>
 				)}
 				onPress={() =>
-					onPress(DoorAction.CLOSE, setErrorMessage, showRequestFailedDialog)
+					onPress(DoorAction.CLOSE, setResultMessage, showRequestFailedDialog)
 				}
 			/>
 		</SafeAreaView>

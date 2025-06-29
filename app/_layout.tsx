@@ -73,6 +73,7 @@ export default function RootLayout() {
 						tabBar={TabBar}
 						screenOptions={{
 							headerShown: false,
+							animation: 'fade',
 						}}
 					>
 						<Tabs.Screen
