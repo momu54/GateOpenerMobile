@@ -1,4 +1,4 @@
-package com.anonymous.DoorOpener
+package dev.momu54.gateopener
 
 import android.app.Application
 import android.content.res.Configuration

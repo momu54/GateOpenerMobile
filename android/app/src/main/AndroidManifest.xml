@@ -29,6 +29,8 @@
         <data android:scheme="exp+cardreader"/>
         <data android:scheme="com.anonymous.DoorOpener"/>
         <data android:scheme="exp+dooropener"/>
+        <data android:scheme="dev.momu54.gateopener"/>
+        <data android:scheme="exp+gateopener"/>
       </intent-filter>
     </activity>
   </application>

@@ -1,4 +1,4 @@
-package com.anonymous.DoorOpener
+package dev.momu54.gateopener
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build
